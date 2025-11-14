@@ -1,0 +1,369 @@
+import os
+import json
+import re
+import jmespath
+import pandas as pd
+import traceback
+
+def read_pagesave(file):
+    with open(rf"D:\Sharma Danesh\Pagesave\Google_map_scrape\product_pagesave\12_11_2025\{file}", 'r', encoding='utf-8') as f:
+        data = f.read()
+    return data
+
+def extract_json(html):
+    try:
+        # Step 1: Split out JSON before any comment (/*)
+        full_raw_json = html.split('/*')[0].strip()
+        full_json = json.loads(full_raw_json)
+    except json.JSONDecodeError as e:
+        print("[ERROR] Failed to load initial JSON from HTML:", e)
+        return None
+
+    try:
+        # Step 2: Extract 'd' key
+        main_raw_json = jmespath.search("d", full_json)
+        if not isinstance(main_raw_json, str):
+            print("[ERROR] 'd' key found but it's not a string.")
+            return None
+    except Exception as e:
+        print("[ERROR] Failed to extract 'd' key using jmespath:", e)
+        return None
+
+    try:
+        # Step 3: Remove )]}' prefix
+        main_raw_json_2 = main_raw_json.split(")]}'")[-1].strip()
+        main_json = json.loads(main_raw_json_2)
+        return main_json
+    except json.JSONDecodeError as e:
+        print("[ERROR] Failed to parse inner JSON after removing prefix:", e)
+        print("[DEBUG] Inner raw string (truncated):", main_raw_json_2[:300])
+        return None
+
+# def extract_fields(json_data):
+#     extracted = []
+#
+#     try:
+#         businesses = json_data[64]
+#     except Exception as e:
+#         print("[ERROR] Could not locate index 64 in JSON.")
+#         return extracted
+#
+#     try:
+#         for item in businesses:
+#             try:
+#                 if "@" in str(item):
+#                     continue  # ⚠️ changed from break → continue
+#                 if "facebook" in str(item):
+#                     continue
+#                 if "instagram" in str(item):
+#                     continue
+#                 if "linkedin" in str(item):
+#                     continue
+#
+#                 name = item[1][11]
+#                 address = item[1][18]
+#                 # lat = item[1][9][2]
+#                 # lon = item[1][9][3]
+#
+#                 country = item[1][183][1][6]
+#                 state_region = item[1][183][1][3]
+#                 county_department = item[1][183][1][0]
+#                 city = item[1][183][1][5]
+#                 zipcode = item[1][183][1][4]
+#
+#                 all_emails_list = []
+#                 email1 = ''
+#                 all_emails_list.append(email1)
+#                 email2 = ''
+#                 all_emails_list.append(email2)
+#                 email3 = ''
+#                 all_emails_list.append(email3)
+#                 email4 = ''
+#                 all_emails_list.append(email4)
+#                 email5 = ''
+#                 all_emails_list.append(email5)
+#                 all_emails = ",".join([em for em in all_emails_list if em]) if all_emails_list else ""
+#
+#                 all_phones_list = []
+#                 try:phone1 = item[1][178][0][3]
+#                 except:phone1 = ''
+#
+#                 all_phones_list.append(phone1)
+#                 phone2 = ''
+#                 all_phones_list.append(phone2)
+#                 phone3 = ''
+#                 all_phones_list.append(phone3)
+#                 phone4 = ''
+#                 all_phones_list.append(phone4)
+#                 phone5 = ''
+#                 all_phones_list.append(phone5)
+#                 all_phones = ",".join([p for p in all_phones_list if p]) if all_phones_list else ""
+#
+#                 categories = ""
+#
+#                 try:website = item[1][75][0][0][2][0][1][2][0]
+#                 except:website = ''
+#
+#                 facebook = ''
+#
+#                 instagram = ''
+#
+#                 linkedin = ''
+#
+#                 try:review = item[1][4][8]
+#                 except:review = ''
+#                 try:rating = item[1][4][7]
+#                 except:rating = ''
+#
+#                 # Try to find matching CID from json_data[16]
+#                 google_maps_url = ""
+#                 try:
+#                     all_urls = json_data[16][3][0][4]
+#                     index = businesses.index(item)
+#                     if index < len(all_urls):
+#                         cid = all_urls[index][0][1]
+#                         google_maps_url = f"https://www.google.com/maps?cid={cid}"
+#                 except Exception:
+#                     pass
+#
+#                 main_cat = item[1][13][0] if item[1][13] else ""
+#                 care = ''
+#
+#                 place_id = google_maps_url.split("=")[-1]
+#
+#                 user_name = ''
+#                 text = ''
+#                 response_from_owner = ''
+#
+#             except Exception as e:
+#                 print(f"[WARNING] Error parsing item, skipping: {e}")
+#                 traceback.print_exc()
+#                 continue
+#
+#             extracted.append({
+#                 "name" : name,
+#                 "address" : address,
+#                 "country" : country,
+#                 "state/region" : state_region,
+#                 "county/department" : county_department,
+#                 "city" : city,
+#                 "zipcode" : zipcode,
+#                 "email1" : email1,
+#                 "email2" : email2,
+#                 "email3" : email3,
+#                 "email4" : email4,
+#                 "email5" : email5,
+#                 "all_emails" : all_emails if email1 else "",
+#                 "phone1" : phone1,
+#                 "phone2" : phone2,
+#                 "phone3" : phone3,
+#                 "phone4" : phone4,
+#                 "phone5" : phone5,
+#                 "all_phones" : all_phones if phone1 else "",
+#                 "categories" : categories,
+#                 "website" : website,
+#                 "facebook" : facebook,
+#                 "instagram" : instagram,
+#                 "linkedin" : linkedin,
+#                 "ratings" : review,
+#                 "review_count" : rating,
+#                 "google_maps_url" : google_maps_url,
+#                 "main_cat" : main_cat,
+#                 "care" : care,
+#                 "place_id" : place_id,
+#                 "user_name" : user_name,
+#                 "text" : text,
+#                 "response_from_owner" : response_from_owner,
+#             })
+#         return extracted
+#     except Exception as e:
+#         print(f"[WARNING] Error parsing item, skipping: {e}")
+#         traceback.print_exc()
+extracted = []
+
+def extract_fields(json_data):
+
+
+    try:
+        businesses = json_data[64]
+    except Exception as e:
+        print("[ERROR] Could not locate index 64 in JSON.")
+        return extracted  # returns []
+
+    # ✅ CRITICAL FIX: Check if businesses is None or not iterable
+    if businesses is None:
+        print("[ERROR] json_data[64] is None. Skipping extraction.")
+        return extracted
+
+    if not isinstance(businesses, (list, tuple)):
+        print(f"[ERROR] json_data[64] is not a list/tuple (got {type(businesses)}). Skipping.")
+        return extracted
+
+    try:
+        for item in businesses:
+            try:
+                # 🚫 These break conditions are suspicious — why break on "@" etc.?
+                # You're breaking the entire loop on first item containing "@"!
+                # Probably meant to `continue`, not `break`.
+                if "@" in str(item):
+                    continue  # ⚠️ changed from break → continue
+                if "facebook" in str(item):
+                    continue
+                if "instagram" in str(item):
+                    continue
+                if "linkedin" in str(item):
+                    continue
+
+                # ... rest of your parsing logic ...
+                try:name = item[1][11]
+                except:name = ""
+
+                try:address = item[1][18]
+                except:address = ""
+
+
+                try:country = item[1][183][1][6]
+                except:country = ""
+
+
+                try:state_region = item[1][183][1][3]
+                except:state_region = ""
+
+                try:county_department = item[1][183][1][0]
+                except:county_department = ""
+
+                try:city = item[1][183][1][5]
+                except:city = ""
+
+                try:zipcode = item[1][183][1][4]
+                except:zipcode = ""
+
+
+                # Phone extraction
+                try:
+                    phone1 = item[1][178][0][3]
+                except:
+                    phone1 = ''
+
+                # Website
+                try:
+                    website = item[1][75][0][0][2][0][1][2][0]
+                except:
+                    website = ''
+
+                # Reviews
+                try:
+                    review = item[1][4][8]
+                except:
+                    review = ''
+                try:
+                    rating = item[1][4][7]
+                except:
+                    rating = ''
+
+                # Google Maps CID
+                google_maps_url = ""
+                try:
+                    all_urls = json_data[16][3][0][4]
+                    idx = businesses.index(item)
+                    if idx < len(all_urls):
+                        cid = all_urls[idx][0][1]
+                        google_maps_url = f"https://www.google.com/maps?cid={cid}"
+                except Exception:
+                    pass
+
+                try:main_cat = item[1][13][0] if item[1][13] else ""
+                except:main_cat = ""
+
+                try:place_id = google_maps_url.split("=")[-1] if google_maps_url else ""
+                except:place_id = ""
+
+
+                extracted.append({
+                    "name": name,
+                    "address": address,
+                    "country": country,
+                    "state/region": state_region,
+                    "county/department": county_department,
+                    "city": city,
+                    "zipcode": zipcode,
+                    "email1": "", "email2": "", "email3": "", "email4": "", "email5": "",
+                    "all_emails": "",
+                    "phone1": phone1, "phone2": "", "phone3": "", "phone4": "", "phone5": "",
+                    "all_phones": phone1 if phone1 else "",
+                    "categories": "",
+                    "website": website,
+                    "facebook": "",
+                    "instagram": "",
+                    "linkedin": "",
+                    "ratings": review,
+                    "review_count": rating,
+                    "google_maps_url": google_maps_url,
+                    "main_cat": main_cat,
+                    "care": "",
+                    "place_id": place_id,
+                    "user_name": "",
+                    "text": "",
+                    "response_from_owner": "",
+                })
+
+            except Exception as e:
+                print(f"[WARNING] Error parsing individual item, skipping: {e}")
+                traceback.print_exc()
+                continue
+
+        return extracted  # ✅ always returns list
+
+    except Exception as e:
+        print(f"[CRITICAL] Unexpected error in extract_fields loop: {e}")
+        traceback.print_exc()
+        return extracted  # ✅ fallback: return empty list, never None
+
+
+# def main():
+#
+#
+#     # folder_path = r"D:\Sharma Danesh\Feasiblility Task\Google_Map\pagesave"
+#     folder_path = r"D:\Sharma Danesh\Pagesave\Google_map_scrape\product_pagesave\12_11_2025"
+#     for file in os.listdir(folder_path):
+#         html = read_pagesave(file)
+#         if html:
+#             json_data = extract_json(html)
+#             if json_data:
+#                 extracted = extract_fields(json_data)
+#                 all_data.extend(extracted)
+
+def main():
+    all_data = []
+    folder_path = r"D:\Sharma Danesh\Pagesave\Google_map_scrape\product_pagesave\12_11_2025"
+    for file in os.listdir(folder_path):
+        html = read_pagesave(file)
+        if not html:
+            print(f"[SKIP] Empty HTML for {file}")
+            continue
+
+        json_data = extract_json(html)
+        if not json_data:
+            print(f"[SKIP] Failed to extract JSON from {file}")
+            continue
+
+        extracted = extract_fields(json_data)
+        # ✅ Guard: ensure extracted is list
+        if extracted is None:
+            print(f"[ERROR] extract_fields returned None for {file} — this should not happen!")
+            extracted = []  # fallback
+        # all_data.extend(extracted)
+
+
+
+if __name__ == '__main__':
+    main()
+
+    if extracted:
+        print(extracted)
+        OUTPUT_FILE = "google_maps_results12.xlsx"
+        df = pd.DataFrame(extracted)
+        df.to_excel(OUTPUT_FILE, index=False)
+        print(f"📁 Excel saved: {OUTPUT_FILE} with {len(extracted)} items.")
+    else:
+        print("❌ No menu items found to save.")
